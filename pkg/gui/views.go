@@ -206,6 +206,15 @@ func (gui *Gui) configureViewProperties() {
 		view.TabWidth = gui.c.UserConfig().Gui.TabWidth
 	}
 
+	// Use subtle gray selection background for staging views in LINE mode
+	// (preserves syntax highlighting while providing full-width highlight)
+	// In HUNK/RANGE mode, we use margin indicator instead (Highlight is disabled dynamically)
+	for _, view := range []*gocui.View{gui.Views.Staging, gui.Views.StagingSecondary} {
+		// Subtle gray background (RGB 60,60,60) - matches our LINE mode selection color
+		view.SelBgColor = gocui.NewRGBColor(60, 60, 60)
+		view.InactiveViewSelBgColor = gocui.ColorDefault
+	}
+
 	gui.Views.CommitDescription.FgColor = theme.GocuiDefaultTextColor
 	gui.Views.CommitDescription.TextArea.AutoWrap = gui.c.UserConfig().Git.Commit.AutoWrapCommitMessage
 	gui.Views.CommitDescription.TextArea.AutoWrapWidth = gui.c.UserConfig().Git.Commit.AutoWrapWidth

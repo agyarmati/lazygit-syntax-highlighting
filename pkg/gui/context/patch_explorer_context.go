@@ -16,6 +16,7 @@ type PatchExplorerContext struct {
 	getIncludedLineIndices func() []int
 	c                      *ContextCommon
 	mutex                  deadlock.Mutex
+	isFocused              bool
 }
 
 var (
@@ -43,7 +44,7 @@ func NewPatchExplorerContext(
 			Key:                        key,
 			Kind:                       types.MAIN_CONTEXT,
 			Focusable:                  true,
-			HighlightOnFocus:           true,
+			HighlightOnFocus:           true, // Keep true for proper focus handling
 			NeedsRerenderOnWidthChange: types.NEEDS_RERENDER_ON_WIDTH_CHANGE_WHEN_WIDTH_CHANGES,
 		})),
 		SearchTrait: NewSearchTrait(c),
@@ -64,6 +65,37 @@ func NewPatchExplorerContext(
 }
 
 func (self *PatchExplorerContext) IsPatchExplorerContext() {}
+
+// HandleFocus overrides SimpleContext.HandleFocus to manage gocui's visual highlight
+// In LINE mode: enable Highlight for full-width background
+// In HUNK/RANGE mode: disable Highlight, use margin indicator instead
+func (self *PatchExplorerContext) HandleFocus(opts types.OnFocusOpts) {
+	self.isFocused = true
+	// Call parent's HandleFocus for all the normal focus handling
+	self.SimpleContext.HandleFocus(opts)
+	// Update highlight based on current selection mode
+	self.updateHighlight()
+}
+
+// HandleFocusLost overrides SimpleContext.HandleFocusLost to track focus state
+func (self *PatchExplorerContext) HandleFocusLost(opts types.OnFocusLostOpts) {
+	self.isFocused = false
+	self.GetView().Highlight = false
+	self.SimpleContext.HandleFocusLost(opts)
+}
+
+// updateHighlight sets gocui's Highlight based on selection mode
+// LINE mode uses gocui's native highlight for full-width background
+// HUNK/RANGE mode uses margin indicator instead
+func (self *PatchExplorerContext) updateHighlight() {
+	if self.GetState() == nil {
+		self.GetView().Highlight = false
+		return
+	}
+	// In LINE mode, enable gocui's highlight for full-width selection
+	// In HUNK/RANGE mode, disable it (we use margin indicator instead)
+	self.GetView().Highlight = self.isFocused && self.GetState().SelectingLine()
+}
 
 func (self *PatchExplorerContext) GetState() *patch_exploring.State {
 	return self.state
@@ -120,7 +152,14 @@ func (self *PatchExplorerContext) GetContentToRender() string {
 		return ""
 	}
 
-	return self.GetState().RenderForLineIndices(self.GetIncludedLineIndices())
+	// Update gocui highlight mode (LINE mode uses native highlight, HUNK/RANGE use margin indicator)
+	self.updateHighlight()
+
+	// Pass view width for full-line backgrounds
+	viewWidth := self.GetView().InnerWidth()
+
+	// Only show selection indicator when this view is focused
+	return self.GetState().RenderForLineIndices(self.GetIncludedLineIndices(), self.isFocused, viewWidth)
 }
 
 func (self *PatchExplorerContext) NavigateTo(selectedLineIdx int) {

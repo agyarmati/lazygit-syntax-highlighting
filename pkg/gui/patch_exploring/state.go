@@ -378,10 +378,19 @@ func (s *State) AdjustSelectedLineIdx(change int) {
 	s.SelectLine(s.selectedLineIdx + change)
 }
 
-func (s *State) RenderForLineIndices(includedLineIndices []int) string {
+func (s *State) RenderForLineIndices(includedLineIndices []int, isFocused bool, viewWidth int) string {
 	includedLineIndicesSet := set.NewFromSlice(includedLineIndices)
+	// Only show selection indicator when view is focused
+	selectedStartIdx, selectedEndIdx := -1, -1
+	if isFocused {
+		selectedStartIdx, selectedEndIdx = s.SelectedPatchRange()
+	}
 	return s.patch.FormatView(patch.FormatViewOpts{
-		IncLineIndices: includedLineIndicesSet,
+		IncLineIndices:   includedLineIndicesSet,
+		SelectedStartIdx: selectedStartIdx,
+		SelectedEndIdx:   selectedEndIdx,
+		LineSelectMode:   isFocused && s.SelectingLine(),
+		ViewWidth:        viewWidth,
 	})
 }
 
